@@ -16,11 +16,18 @@ local yDist
 local floor
 local noNeg  --internal function only
 local match
+local matchX
+local matchY
 local highX
 local highY
 local lowX
 local lowY
 local midPoint
+local travel
+local xTravel
+local yTravel
+local cString
+local tString
 
 --local codeBlocks = {}
 
@@ -28,24 +35,24 @@ add = function (t1, t2)
   return {(t1[1] + t2[1]), (t1[2] + t2[2])}
 end
 
-subCoods = function(t1, t2)
+sub = function(t1, t2)
   return {(t1[1] - t2[1]), (t1[2] - t2[2])}
 end
 
 addX = function (t1, t2)
-  return {(t1[1] + t2[1]), t2}
+  return {(t1[1] + t2[1]), t1[2]}
 end
 
 subX = function(t1, t2)
-  return {(t1[1] - t2[1]), t2}
+  return {(t1[1] - t2[1]), t1[2]}
 end
 
 addY = function (t1, t2)
-  return {t1, (t1[2] + t2[2])}
+  return {t1[1], (t1[2] + t2[2])}
 end
 
 subY = function(t1, t2)
-  return {t1, (t1[2] - t2[2])}
+  return {t1[1], (t1[2] - t2[2])}
 end
 
 dist = function(t1, t2)
@@ -75,10 +82,18 @@ match = function(t1, t2)
   return (t1[1] == t2[1]) and (t1[2] == t2[2])
 end
 
-highX = function(Cot)
-  local s = Cot[1]
+matchX = function(t1, t2)
+  return (t1[1] == t2[1])
+end
+
+matchY = function(t1, t2)
+  return (t1[2] == t2[2])
+end
+
+highX = function(coT)
+  local s = coT[1]  --s = first set of coordinates in table coT
   local highest = s[1]
-  for _, co in ipairs(Cot) do
+  for _, co in ipairs(coT) do
     if (co[1] > highest) then
       highest = co[1]
     end
@@ -86,10 +101,10 @@ highX = function(Cot)
   return highest
 end
 
-highY = function(Cot)
-  local s = Cot[1]
+highY = function(coT)
+  local s = coT[1]
   local highest = s[2]
-  for _, co in ipairs(Cot) do
+  for _, co in ipairs(coT) do
     if (co[2] > highest) then
       highest = co[2]
     end
@@ -97,10 +112,10 @@ highY = function(Cot)
   return highest
 end
 
-lowX = function(Cot)
-  local s = Cot[1]
+lowX = function(coT)
+  local s = coT[1]
   local lowest = s[1]
-  for _, co in ipairs(Cot) do
+  for _, co in ipairs(coT) do
     if (co[1] < lowest) then
       lowest = co[1]
     end
@@ -108,10 +123,10 @@ lowX = function(Cot)
   return lowest
 end
 
-lowY = function(Cot)
-  local s = Cot[1]
+lowY = function(coT)
+  local s = coT[1]
   local lowest = s[2]
-  for _, co in ipairs(Cot) do
+  for _, co in ipairs(coT) do
     if (co[2] < lowest) then
       lowest = co[2]
     end
@@ -126,7 +141,35 @@ midPoint = function(t1, t2)
     }
 end
 
---using my handle makes for a name unlikely to already exist in _ENV already
+travel = function(source, dest)
+  return {(dest[1] - source[1]), (dest[2] - source[2])}
+end
+
+xTravel = function(source, dest)
+  return dest[1] - source[1]
+end
+
+yTravel = function(source, dest)
+  return dest[2] - source[2]
+end
+
+cString = function(t)
+  return "(" .. tostring(t[1]) .. ", " .. tostring(t[2]) .. ")"
+end
+
+tString = function(coT)
+  local toReturn = ""
+  local s = #coT
+  for t, c in ipairs(coT) do
+    toReturn = toReturn .. "(" .. tostring(c[1]) .. ", " .. tostring(c[2]) .. ")"
+    if (s ~= t) then
+      toReturn = toReturn .. ", "
+    end
+  end
+end
+
+
+--using my handle makes for a name unlikely to already exist in _ENV 
 bk3kcMath = {
   add = add,
   sub = sub,
@@ -138,11 +181,18 @@ bk3kcMath = {
   yDist = yDist,
   floor = floor,
   match = match,
+  matchX = matchX,
+  matchY = matchY,
   highX = highX,
   highY = highY,
   lowX = lowX,
   lowY = lowY,
-  midPoint = midPoint
+  midPoint = midPoint,
+  travel = travel,
+  xTravel = xTravel,
+  yTravel = yTravel,
+  cString = cString,
+  tString = tString
   }
 
 return bk3kcMath

@@ -40,6 +40,7 @@ local keyNameExists         --codeBlock will be chosen
 local keyReturn             --probably done
 local elementsToString      --done
 local updateMode            --???
+local blankPackage          --
 --end function declarations
 
 elementsToString = function(whatTable)
@@ -143,7 +144,7 @@ whatIs = function(k, v, i) -- was whatIs = function(whatTable, k, v, i)
          --(key, value, index)
   local t = type(v)  --was local t = type(whatTable[k])
     --evalutates value not key
-    
+     
   if (t == "table") then
     return tableDump(v , tostring(k), i)  -- was (whatTable[k], i + 1, tostring(k)
   elseif (t == "string") then
@@ -164,10 +165,16 @@ end
 
 tableDump = function(whatTable, tableName, i)
   local toReturn = tableName .. " : {\n"
+  local s = #whatTable
   --table.sort(whatTable)
   i = i + 1
   for k, v in pairs(whatTable) do
-    toReturn = toReturn .. spacer(i) .. whatIs(k, v, i) .. "\n"
+    toReturn = toReturn .. spacer(i) .. whatIs(k, v, i) 
+    if (k ~= s) then --this isn't going to work right for not numeric indexes, replace
+      toReturn = toReturn .. ",\n"
+    else
+      toReturn = toReturn .. "\n"
+    end
   end
     
   toReturn = toReturn .. spacer(i - 1) .. "}"
@@ -266,21 +273,39 @@ keyReturn = function(whatTable, doSort, ignoreKeys)
   --I may use this elsewhere if not here
   --returns a table containing the keynames of all keys for a table
   --the returned table will be all numberic keys paired with values thus very easy to parse for other functions
+  local varOneType = type(doSort)
+  local varTwoType = type(ignoreKeys)
+  
+  if (varOneType == "boolean") and (varTwoType == "table") then   --expected input
+    --nothing
+  elseif (varOneType == "boolean") and (varTwoType == "nil") then --only doSort was specified
+    --nothing
+  elseif (varOneType == "table") and (varTwoType == "boolean") then
+      doSort, ignoreKeys = ignoreKeys, doSort   --sent backwards, switch values    
+  elseif (varOneType == "table") and (varTwoType == "nil") then
+    doSort, ignoreKeys = false, doSort
+  else --we're getting incorrect arguments
+    if (varOneType ~= "boolean") then
+      doSort = false
+    end
+    if (varTwoType ~= "table") then
+      ignoreKeys = nil
+    end
+  end
+    
+  local elements = table.unpack(whatTable)
   local toReturn = {}
-  local i = i
-  doSort = doSort or false  --doSort is optional.  If not used, will not sort table before return
-  if ignoreKeys then 
-    for k, v in pairs(whatTable) do
-      if not (keyNameExists( { k }, ignoreKeys)) then
-        toReturn[i] = k
-        i = i + 1
+  
+  if (type(ignoreKeys) == "table") then 
+    local i = 1
+    for _, v in ipairs(elements) do
+      if not (keyNameExists( { v }, ignoreKeys)) then
+        toReturn[i] = v
+        i = i + 1 --only incriment for elements not found in ignoreKeys
       end
     end
   else
-    for k, v in pairs(whatTable) do
-      toReturn[i] = k
-      i = i + 1
-    end
+    toReturn = elements
   end
   
   if doSort then
@@ -289,6 +314,23 @@ keyReturn = function(whatTable, doSort, ignoreKeys)
     return toReturn
   end
 end
+
+
+blankPackage = function()
+  return {
+    flush = function(...) end,
+    newTable = function(...) end,
+    append = function(...) end,
+    setMode = function(...) end,
+    dump = function(...) end,
+    sAT = function(...) end,
+    sAR = function(...) end,
+    doSanitize = nil,
+    context = {},
+    dumpTable = {},
+    blankPackage = function(...) end
+    }
+end 
   
 
 bk3kLogger = {
@@ -301,7 +343,8 @@ bk3kLogger = {
   sAR = sanitizeArgumentRange,
   doSanitize = doSanitize,
   context = clientContext,
-  dumpTable = clientTable
+  dumpTable = clientTable,
+  blankPackage = blankPackage
   }
 
 return bk3kLogger
