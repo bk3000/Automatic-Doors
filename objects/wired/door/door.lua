@@ -1,5 +1,6 @@
--- automatic doors 3.5(tentative)
+-- automatic doors 3.5
 -- basic code by Chucklefish, additional code by lornlynx (with some help from Healthire), greatly reworked and updated by bk3k
+    --well at this point not much Chucklefish code remains, but it got us started and provided a good reference.
 -- the additional code is documentated
 
 
