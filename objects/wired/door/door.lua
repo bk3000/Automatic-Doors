@@ -768,8 +768,8 @@ function setDirectionNPC()
   local npcPosition = world.entityPosition(npcIds[1])
 
   if not storage.isHorizontal then
-    setDirection( cMath.xTravel(npcPosition, storage.doorPosition) )
+    setDirection( cMath.xTravel(storage.doorPosition, npcPosition) )
   else
-    setDirection( cMath.yTravel(npcPosition, storage.doorPosition) )
+    setDirection( cMath.yTravel(storage.doorPosition, npcPosition) )
   end
 end
