@@ -1,0 +1,21 @@
+[
+  { 
+  "op" : "add",
+  "path" : "/noAuto",
+  "value" : false
+  },
+  {
+  "op" : "add",
+  "path" : "/horizontal_door",  //necessary override since we don't check for diagonal doors expressly... yet?
+  "value" : false
+  },
+  {
+  "op" : "add",
+  "path" : "/queryRadius",
+  "value" : 6.5 //was 5.5 but this is 6 blocks wide and scanning from center means you have to be partially on top
+  }
+  
+  
+  
+  
+]
