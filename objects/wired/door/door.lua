@@ -32,8 +32,10 @@ function init()
   
   if not storage.quickCheck then 
     storage.spaces = object.spaces()
-    initDoorStuff()
+    storage.quickCheck = initDoorStuff()
     --L.dump(L.dumpTable, L.context)
+    
+    storage.objectName = config.getParameter("objectName", "door")
     
    --boolean values
     storage.postInit = false
@@ -65,7 +67,6 @@ function init()
     
     
     --string values
-    storage.objectName = config.getParameter("objectName", "door")
     storage.openingAnimation_stateName = config.getParameter("openingAnimation", "open")
     --if doors have an opening animation cycle and frames seperate from the "open" state
       --my doors use "opening"
