@@ -44,7 +44,7 @@ function init()
     storage.defaultInteractive =  config.getParameter("interactive", true)
     --storage.wireOpened = false
     --storage.wireControlled = object.isInputNodeConnected(0)
-    storage.state = ((config.getParameter("defaultState", "closed") == "open") and not storage.locked)
+    storage.state = storage.state or ((config.getParameter("defaultState", "closed") == "open") and not storage.locked)
     storage.playerOpened = false
     storage.playerClosed = false
     storage.liquidAware = config.getParameter("liquidAware" , false)
@@ -111,6 +111,7 @@ function init()
     lockDoor()
   else
     onInputMultiNodeChange()
+    updateAnimation(not storage.state)
   end
 
   updateInteractive()
@@ -278,8 +279,6 @@ function anyInputNodeConnected() --called from init() and onNodeConnectionChange
   
   storage.wireControlled = object.isInputNodeConnected(0)
   storage.noClearOpen = object.isOutputNodeConnected(0)  --output not input!
-  
-  
 end
 
 
@@ -316,6 +315,7 @@ function onInputMultiNodeChange(args) --added
   end
   
   local wasOpen = storage.state
+  
   storage.wireOpened = false
   local n = 0
   while (n <= storage.maxInputNode) do
@@ -330,17 +330,19 @@ function onInputMultiNodeChange(args) --added
     if not storage.state then
       realOpenDoor(storage.doorDirection)
     else
-    
+      
     end
   elseif storage.anyInputNodeConnected then
     realCloseDoor()
     --trying this out
     --animator.setAnimationState("doorState", storage.lockingAnimation_stateName)
   else 
+    
     --autoClose()
   end
+  
   --updateAnimation(wasOpen)
-
+  
 end
 
 
