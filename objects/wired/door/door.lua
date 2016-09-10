@@ -111,7 +111,7 @@ function init()
     lockDoor()
   else
     onInputMultiNodeChange()
-    updateAnimation(not storage.state)
+    updateAnimation(storage.state)
   end
 
   updateInteractive()
@@ -257,11 +257,16 @@ end
 -----------pure initialization above, mostly actions below
 
 function onNodeConnectionChange(args)
+  local wasControlled = storage.wireControlled
   anyInputNodeConnected()
   updateInteractive()
   onInputMultiNodeChange()
   --onInputNodeChange({ level = object.getInputNodeLevel(0) })
   updateCollisionAndWires()
+  
+  if (storage.wireControlled ~= wasControlled) then
+    updateAnimation(storage.state)
+  end
   
 end
 
@@ -277,8 +282,16 @@ function anyInputNodeConnected() --called from init() and onNodeConnectionChange
     n = n + 1
   end
   
-  storage.wireControlled = object.isInputNodeConnected(0)
-  storage.noClearOpen = object.isOutputNodeConnected(0)  --output not input!
+  if (storage.maxInputNode >= 0) then
+    storage.wireControlled = object.isInputNodeConnected(0)
+  else
+    storage.wireControlled = false
+  end
+  if (storage.maxOutputNode >= 0) then
+    storage.noClearOpen = object.isOutputNodeConnected(0)  --output not input!
+  else
+    storage.noClearOpen = false
+  end
 end
 
 
@@ -411,12 +424,14 @@ function updateAnimation(wasOpen)
       end
       animator.playSound("close")
     end
-  elseif storage.locked or storage.wireControlled then
-    aState = storage.lockedAnimation_stateName
-  elseif storage.state then
-    aState = "open"
-  else
-    aState = "closed"
+  else --door is not opening nor closing
+    if storage.locked or storage.wireControlled then
+      aState = storage.lockedAnimation_stateName
+    elseif storage.state then
+      aState = "open"
+    else
+      aState = "closed"
+    end
   end
   
   animator.setAnimationState("doorState", aState)       
