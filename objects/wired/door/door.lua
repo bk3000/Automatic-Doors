@@ -482,7 +482,7 @@ function initMaterialSpaces()  --added
   
   --local metaMatC = config.getParameter("closedMaterials", nil) or {"bk3k_invisible_hardBlock", "bk3k_invisible_hardBlock"}
   local metaMatC = config.getParameter("closedMaterials", nil) or {"metamaterial:door", "metamaterial:lockedDoor"}
-  local metaMatO =  config.getParameter("openMaterials", nil)  
+  local metaMatO =  config.getParameter("openMaterials", {})  
     --^^these are just lists of available metaMaterials per state
   
   local j = 1
