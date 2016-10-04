@@ -1,4 +1,4 @@
--- automatic doors 3.5
+-- automatic doors 3.6.t1
 -- basic code by Chucklefish, additional code by lornlynx (with some help from Healthire), greatly reworked and updated by bk3k
     --well at this point not much Chucklefish code remains, but it got us started and provided a good reference.
 -- the additional code is documentated
@@ -15,28 +15,23 @@ require("/scripts/bk3k/bk3kLogger(0.1).lua")
 extraFunction = function() end  --blank function called by update.  If more features needed for specialty purposes
                                   --overwrite/replace with an actual function
                                   --just put this script sooner on the list
-                                  
+extraInit = function() end
 
 
 function init()
-  message.setHandler("openDoor", function() openDoor() end)
-  message.setHandler("lockDoor", function() lockDoor() end)
-  message.setHandler("closeDoor", function() closeDoor() end)
-
   self.doDebug = false --change to false for release versions!  Or you'll have HUGE logs!
+  initMessage()
   storage.id = entity.id()
   storage.doorPosition = object.position()
-
   initPackages()
 
-  
-  if not storage.quickCheck then 
+  if not storage.quickCheck then
     storage.spaces = object.spaces()
     storage.quickCheck = initDoorStuff()
     --L.dump(L.dumpTable, L.context)
-    
+
     storage.objectName = config.getParameter("objectName", "door")
-    
+
    --boolean values
     storage.postInit = false
     storage.defaultLocked = config.getParameter("defaultlocked", false)
@@ -47,25 +42,28 @@ function init()
     storage.state = storage.state or ((config.getParameter("defaultState", "closed") == "open") and not storage.locked)
     storage.playerOpened = false
     storage.playerClosed = false
-    storage.liquidAware = config.getParameter("liquidAware" , false)
-    storage.lightAware = config.getParameter("lightAware" , false)
-    --once implimented, check very infrequently
     storage.doorException = doorException()  --check if door is part of exception list
-    storage.noAuto =  noAutomatic()
+    storage.noAuto = noAutomatic()
     storage.noNPCuse = config.getParameter("noNPCuse", false)
       --this is for doors that NPCs must never be allowed to open
         --special case use such as not really a "door" in the traditional sense
         --sort of thing which would be triggered by missions/AI/etc.
-        
-    
+
+
     --numeric values
-    
-    
+    storage.maxInputNode = ( #(config.getParameter("inputNodes", {})) - 1 )
+    storage.maxOutputNode = ( #(config.getParameter("outputNodes", {})) - 1 )
     --standard LUA tables start at 1 instead of 0.  Starbound assignes the first node to 0 despite this.
+
+    storage.out0 = (storage.maxOutputNode > -1)
+    storage.out1 = (storage.maxOutputNode > 0)
+
+
+    
     --storage.queryRadius = config.getParameter("queryOpenRadius", 5)
       --I don't like the door opening directly in my face, but edit to any default value you like!
-    
-    
+
+
     --string values
     storage.openingAnimation_stateName = config.getParameter("openingAnimation", "open")
     --if doors have an opening animation cycle and frames seperate from the "open" state
@@ -85,13 +83,10 @@ function init()
       config.getParameter("openLight", {0,0,0,0}),
       config.getParameter("closedLight", {0,0,0,0})
       }
+    storage.scanBox = config.getParameter("scanBox", nil)
+    storage.proximityOut = false
   end
-  
-  storage.maxInputNode = ( #(config.getParameter("inputNodes", {})) - 1 )
-  storage.maxOutputNode = ( #(config.getParameter("outputNodes", {})) - 1 )
-  
-  storage.out0 = (storage.maxOutputNode > -1)
-  storage.out1 = (storage.maxOutputNode > 0)
+
   
   self.closeCooldown = 0
   self.openCooldown = 0
@@ -103,7 +98,7 @@ function init()
   --L.dump(L.dumpTable, {"After calling initMaterialSpaces"})
   updateCollisionAndWires()
   --called only in init(), will call updateMaterialSpaces() after completion
-  
+
 
   if storage.state and not (storage.locked or storage.wireControlled or storage.wireOpened) then
     realOpenDoor(storage.doorDirection)
@@ -111,20 +106,25 @@ function init()
     lockDoor()
   else
     onInputMultiNodeChange()
-    updateAnimation(storage.state)
+    updateAnimation(not storage.state)
   end
 
   updateInteractive()
   initIncludedTypes() --things we'll regularily scan for
-
-  --if storage.liquidAware or storage.lightAware then
-    --initContactQuery()  --not implimented yet 
-      --and in light of better ways to control for liquids, this may well get scrapped entirely
-  --end
-      
+  
   --L.context[1] = "End of "
   --L.dump(L.dumpTable, L.context)
   storage.postInit = true
+  extraInit()
+end
+
+function initMessage()
+  message.setHandler("openDoor", function() openDoor() end)   --vanilla NPCs use
+  message.setHandler("lockDoor", function() lockDoor() end)   --vanilla NPCs use
+  message.setHandler("closeDoor", function() closeDoor() end)
+  --this may get far bigger which is why I moved it to its own function
+  --eventually there should be a way to change the behavior of doors from a console etc
+    --this is probably the mechanism
 end
 
 
@@ -144,7 +144,7 @@ function initPackages()  --added
     L = _ENV.bk3kLogger.blankPackage()
       --nothing but empty tables/values and functions as such would not cause errors when called
   end
-  
+
 end
 
 
@@ -184,25 +184,22 @@ function initDoorStuff()  --added
                         --a fact we could easily determine at this point by feeding each "corner" to doorOccupiesSpace()
                         --if we needed to know it
 
-  --storage.center = cMath.midPoint(storage.corners.upperRight, storage.corners.lowerLeft)
   storage.center =  {
                     (highX + lowX) / 2,
                     (highY + lowY) / 2
                     }
 
-  --local xDist = cMath.xDist(storage.corners.upperRight, storage.corners.upperLeft)
-  --local yDist = cMath.yDist(storage.corners.upperRight, storage.corners.lowerRight)
   local xDist = highX - lowX
   local yDist = highY - lowY
   local hD = config.getParameter("horizontal_door", nil)  --this can override the detected value
 
-  if hD or ((xDist > yDist) and (hD ~= false)) then
+  if hD or ((xDist > yDist) and (hD ~= false)) then --may look redundant, but it isn't
     if (storage.queryRadius < (xDist / 2)) then
       storage.queryRadius = xDist / 2
     end
-    if not config.getParameter("platformDoors", false) then  --if set then the 
+    if not config.getParameter("platformDoors", false) then  --if set then the radius is the true center
       storage.queryCenter = cMath.subY(storage.center, {_, storage.queryRadius})
-    else 
+    else
       storage.queryCenter = storage.center
     end
     --L.dump({storage.queryCenter}, {"after door was determined to be horizontal"})
@@ -216,6 +213,13 @@ function initDoorStuff()  --added
     storage.isHorizontal = false
   end
   
+  if storage.scanBox then   
+    --at this point storage.scanBox would have 2 relative positions represending bound corners
+    --and we're going to swap that for real positions
+    storage.scanBox[1] = cMath.add(storage.scanBox[1], clamp)
+    storage.scanBox[2] = cMath.add(storage.scanBox[2], clamp)
+  end
+
   return true
     --always return true to set storage.quickCheck and if set this function shouldn't run at all
     --in the event that all the storage variables remain set it would just be a waste of CPU cycles.
@@ -261,13 +265,12 @@ function onNodeConnectionChange(args)
   anyInputNodeConnected()
   updateInteractive()
   onInputMultiNodeChange()
-  --onInputNodeChange({ level = object.getInputNodeLevel(0) })
   updateCollisionAndWires()
-  
+
   if (storage.wireControlled ~= wasControlled) then
     updateAnimation(storage.state)
   end
-  
+
 end
 
 
@@ -287,10 +290,13 @@ function anyInputNodeConnected() --called from init() and onNodeConnectionChange
   else
     storage.wireControlled = false
   end
-  if (storage.maxOutputNode >= 0) then
-    storage.noClearOpen = object.isOutputNodeConnected(0)  --output not input!
+  if storage.out0 then
+    storage.noAutoClose = object.isOutputNodeConnected(0)  --output not input!
+    if storage.out1 then 
+      storage.proximityOut = object.isOutputNodeConnected(1)
+    end
   else
-    storage.noClearOpen = false
+    storage.noAutoClose = false
   end
 end
 
@@ -320,15 +326,14 @@ end
 
 
 function onInputMultiNodeChange(args) --added
-  
+
   if storage.defaultLocked then
     --delegate to another function
     secureControl()
     return
   end
-  
+
   local wasOpen = storage.state
-  
   storage.wireOpened = false
   local n = 0
   while (n <= storage.maxInputNode) do
@@ -342,20 +347,10 @@ function onInputMultiNodeChange(args) --added
   if storage.wireOpened then
     if not storage.state then
       realOpenDoor(storage.doorDirection)
-    else
-      
     end
   elseif storage.anyInputNodeConnected then
     realCloseDoor()
-    --trying this out
-    --animator.setAnimationState("doorState", storage.lockingAnimation_stateName)
-  else 
-    
-    --autoClose()
   end
-  
-  --updateAnimation(wasOpen)
-  
 end
 
 
@@ -409,9 +404,8 @@ end
 
 
 function updateAnimation(wasOpen)
-  --storage.state == isOpen
   local aState
-  
+
   if (storage.state ~= wasOpen) then
     if storage.state then --door opening
       aState = storage.openingAnimation_stateName
@@ -433,8 +427,8 @@ function updateAnimation(wasOpen)
       aState = "closed"
     end
   end
-  
-  animator.setAnimationState("doorState", aState)       
+
+  animator.setAnimationState("doorState", aState)
 end
 
 
@@ -445,14 +439,13 @@ end
 
 function updateCollisionAndWires()
   updateMaterialSpaces()
-  if storage.state then 
+  if storage.state then
     object.setMaterialSpaces(storage.openMaterialSpaces)
-  else 
+  else
     object.setMaterialSpaces(storage.closedMaterialSpaces)
   end
-  
-  --object.setAllOutputNodes(storage.state)
-  if storage.out0 then 
+
+  if storage.out0 then
     object.setOutputNodeLevel(0, storage.state)
   end
 end
@@ -464,7 +457,7 @@ function updateMaterialSpaces() -- added
   elseif storage.wireControlled then
     storage.closedMaterialSpaces = storage.matTableClosed[2] --"metamaterial:lockedDoor"
   else
-    storage.closedMaterialSpaces = storage.matTableClosed[1] -- "metamaterial:door"
+    storage.closedMaterialSpaces = storage.matTableClosed[1] --"metamaterial:door"
   end
 end
 
@@ -473,20 +466,19 @@ function initMaterialSpaces()  --added
   --forget the vanilla idea of reading attributes and rebuilding tables every time
   --lets just build and store full material tables at init() time
   --and switch between them as needed with updateMaterialSpaces()
-  
+
   storage.openMaterialSpaces = config.getParameter("openMaterialSpaces", {})  --set by this function, maybe changed
   storage.closedMaterialSpaces = config.getParameter("closedMaterialSpaces", {})  --set, not changed by this function
   storage.closedMatSpacesDefined = ( (#storage.closedMaterialSpaces) >  0 )
   storage.matTableClosed = { {}, {} }
   storage.matTableOpen = { {}, {} }
-  
-  --local metaMatC = config.getParameter("closedMaterials", nil) or {"bk3k_invisible_hardBlock", "bk3k_invisible_hardBlock"}
+
   local metaMatC = config.getParameter("closedMaterials", nil) or {"metamaterial:door", "metamaterial:lockedDoor"}
-  local metaMatO =  config.getParameter("openMaterials", {})  
+  local metaMatO =  config.getParameter("openMaterials", {})
     --^^these are just lists of available metaMaterials per state
-  
+
   local j = 1
-  local count = #metaMatC 
+  local count = #metaMatC
 
   while (j <= count) do
     for _, space in ipairs(storage.spaces) do
@@ -494,19 +486,19 @@ function initMaterialSpaces()  --added
     end
     j = j + 1
   end
-  
+
   if (#storage.openMaterialSpaces > 0) and (#metaMatO > 0) then --openMaterialSpaces won't be redefined if no defined mats
     j = 1
     count = #metaMatO
-    
+
     while (j <= count) do
       for _, space in ipairs(storage.spaces) do
         table.insert(storage.matTableOpen[j], {space, metaMatO[j]})
       end
       j = j + 1
     end
-    
-    table.insert(storage.matTableOpen, { } ) 
+
+    table.insert(storage.matTableOpen, { } )
       --add an extra blank table element at the end for when clearing is desirable
     storage.openMaterialSpaces = storage.matTableOpen[1]
       --currently assuming only 1 material defined for this
@@ -516,12 +508,12 @@ end
 
 
 function setMaterialSpaces(whatState, whatMaterialTableIndex) --added
-  --most doors won't need this and probably only gets called externally through scriptedEntity() only by entities 
+  --most doors won't need this and probably only gets called externally through messenging system only by entities
   --which understand the specific door and thus what materials are available at what index
   
   if (whatState == "open") then
     storage.openMaterialSpaces = storage.matTableOpen[i]
-  elseif (whatState == "closed") then 
+  elseif (whatState == "closed") then
     storage.closedMaterialSpaces = storage.matTableClosed[i]
   end
 end
@@ -547,7 +539,6 @@ function hasCapability(capability)
     return false
   elseif capability == 'lockedDoor' then
     return storage.locked
-  --elseif (object.isInputNodeConnected(0) or storage.wireOpened or storage.locked or (self.closeCooldown > 0) or (self.openCooldown > 0)) then
   elseif storage.wireControlled or storage.wireOpened or storage.locked then
     return false
   elseif capability == 'door' then
@@ -598,17 +589,15 @@ function lockDoor()
     storage.locked = true
 
     if storage.state then
-      --animator.setAnimationState("doorState", "locking")
       storage.state = false
     else
       --no need to close door etc, just change animation state
-      --animator.setAnimationState("doorState", storage.lockingAnimation_stateName)
     end
   end
   updateCollisionAndWires()
   updateAnimation(wasOpen)
   updateLight()
-  
+
 end
 
 
@@ -625,11 +614,7 @@ function realCloseDoor()
   -- only close door when cooldown is zero
   --if storage.state and (self.closeCooldown <= 0) then
   local wasOpen = storage.state
-  --if storage.state then
-    storage.state = false
-    --animator.playSound("close")
-    --animator.setAnimationState("doorState", "closing")
-  --end
+  storage.state = false
   updateCollisionAndWires()
   updateAnimation(wasOpen)
   updateLight()
@@ -665,10 +650,6 @@ function realOpenDoor(direction)
   if not storage.state then
     storage.state = true
     setDirection((direction == nil or direction * object.direction() < 0) and -1 or 1)
-    --animator.playSound("open")
-    --animator.setAnimationState("doorState", storage.openingAnimation_stateName)
-  --else
-    --animator.setAnimationState("doorState", "open")
   end
 
   updateCollisionAndWires()
@@ -678,9 +659,51 @@ function realOpenDoor(direction)
 end
 
 
+function scan(incl, excl)
+  --incl should be a table of strings
+  --excl should in most cases be storage.id which is just a stored return from object.id()
+  local results
+  local didFind
+  
+  if storage.scanBox then 
+    results = world.entityQuery(storage.scanBox[1],
+      storage.scanBox[2], {
+        withoutEntityId = excl,
+        includedTypes = incl,
+        boundMode = storage.boundVar
+        })
+  else 
+    results = world.entityQuery(storage.queryCenter,
+      storage.queryRadius, {
+        withoutEntityId = excl,
+        includedTypes = incl,
+        boundMode = storage.boundVar
+        })
+  end
+  
+  didFind = (#results > 0)
+  
+  if storage.proximityOut then
+    if (self.previousFound ~= didFind) then
+      --this check prevents attempting updating the node state when the node didn't actually change!
+      object.setOutputNodeLevel(1, didFind)
+    end
+    self.previousFound = didFind
+  end
+    --if the door has output node(1) that's currently wired, then output if any scan target found 
+      --as defined by "scanTargets" or defaults to {"player", "vehicle"}
+    --this is regardless of the actual door being open or closed
+    
+  return results, didFind
+end
+
+
 -- Main function, is running constantly with delta t time interval, functions esentially like an infinite while loop
 --
 function update(dt)
+  local objectIdsOpen
+  local targetsFound
+  
   -- lowers cooldown with each cycle
   if self.closeCooldown > 0 then
     self.closeCooldown = self.closeCooldown - dt
@@ -692,7 +715,11 @@ function update(dt)
   --everything remaining is used to make doors automatic, and therefore should be skipped
   --when automatic functionality is undesirable.  No automatic when wired to input 1, opened by wire,
   --don't need automatic functionality when door opened from ANY wire input or locked
-  if storage.noAuto or (storage.wireControlled and not self.npcClosed) or storage.locked then
+  if storage.noAuto or (storage.wireControlled and not self.npcClosed) or storage.locked then  
+    if storage.proximityOut then
+      scan(storage.scanTargets, storage.id)  
+      --calling scan even though doors aren't automatic, disreguarding results so that wire node(1) gets updated
+    end
     return
   elseif self.npcClosed and storage.wireControlled and (self.openCooldown <= 0) then
     --onInputNodeChange()
@@ -701,37 +728,28 @@ function update(dt)
     self.closeCooldown = 0.05
     self.openCooldown = 0.05
     self.npcClosed = false
+    if storage.proximityOut then
+      scan(storage.scanTargets, storage.id)
+    end
     return
   end
-
-  local objectIdsOpen = world.entityQuery(storage.queryCenter, 
-        storage.queryRadius, {
-        withoutEntityId = storage.id,
-        includedTypes = storage.scanTargets,
-        boundMode = storage.boundVar})
+  
+  objectIdsOpen, targetsFound = scan(storage.scanTargets, storage.id)
         
-  local targetsfound = (#objectIdsOpen > 0)
-
-  if targetsfound then
+  if targetsFound then
     autoOpen(objectIdsOpen)
   else
     -- resetting toggle once player gets out of range
     storage.playerClosed = false
-    if not storage.noClearOpen then
+    if not storage.noAutoClose then
       --found some doors in missions with only wired outputs!
       --this will prevent doors with wired outputNode(0) from autoClosing when player opened
       storage.playerOpened = false
     end
-    
+
     autoClose()
   end
   
-  if storage.out1 and (self.previousFound ~= targetsfound) then 
-    --if the door has a second output node, output true when any scan target found despite the state of the door itself
-      --defined by "scanTargets" or defaults to {"player", "vehicle"}
-    object.setOutputNodeLevel(1, targetsfound)
-  end
-  self.previousFound = targetsfound
   extraFunction() --by default this is a blank function
 end
 
@@ -749,8 +767,7 @@ function autoOpen(objectIdsOpen)
 
   if not storage.isHorizontal then
     realOpenDoor( cMath.xTravel(storage.doorPosition, playerPosition) )
-	  --self.closeCooldown = 0.05
-    -- sb.loginfo("direction: %d", playerPosition[1] - object.position()[1])
+	  -- sb.loginfo("direction: %d", playerPosition[1] - object.position()[1])
   else
     realOpenDoor( cMath.yTravel(storage.doorPosition, playerPosition) )
     self.closeCooldown = 2
@@ -764,15 +781,19 @@ function autoClose()
   if (self.closeCooldown > 0) or not storage.state or storage.playerOpened or storage.wireOpened then
     return
   end
+  local npcIds --disable for NPC's, close when opened by player
+  local foundNPC
+  
+  
+  local npcIds, foundNPC = scan({"NPC"}, storage.id)
   -- check for NPCs in a smaller radius
-  local npcIds = world.npcQuery(storage.queryCenter, storage.queryRadius - 1, {boundMode = storage.boundVar})
-
+  
     -- prevents door spasming
-  if (#npcIds > 0) and (not storage.isHorizontal) then
+  if foundNPC and not storage.isHorizontal then
     return
   end
 
- --disable for NPC's, close when opened by player
+ 
   realCloseDoor()
   storage.playerClosed = false
 end
@@ -780,9 +801,11 @@ end
 
 function setDirectionNPC()
   --special case function corrects direction if NPC opened door or will be nearest when opening
-  local npcIds = world.npcQuery(storage.queryCenter, storage.queryRadius - 1, {boundMode = storage.boundVar})
-  if (#npcIds == 0) then
-    return --in theory an NPC may move before this is called
+  local ncpIds
+  local foundNPC
+  npcIds, foundNPC = scan({"NPC"}, storage.id)
+  if not foundNPC then
+    return  --in theory an NPC may move before this is called
   end
   local npcPosition = world.entityPosition(npcIds[1])
 
